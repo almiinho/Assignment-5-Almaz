@@ -1,0 +1,14 @@
+services:
+  jenkins:
+    image: jenkins/jenkins:lts-jdk17
+    container_name: xai-plantdx-jenkins
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      # Powerful host access: use only on a trusted local machine.
+      - /var/run/docker.sock:/var/run/docker.sock
+volumes:
+  jenkins_home:

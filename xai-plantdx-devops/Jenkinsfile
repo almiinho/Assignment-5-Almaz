@@ -1,0 +1,36 @@
+pipeline {
+    agent any
+    options { timestamps(); disableConcurrentBuilds() }
+    environment {
+        IMAGE_NAME = 'xai-plantdx-dataset-audit'
+        IMAGE_TAG = "${BUILD_NUMBER}"
+    }
+    stages {
+        stage('Checkout') { steps { checkout scm } }
+        stage('Install and Test') {
+            steps {
+                sh '''
+                    python3 -m venv .venv
+                    . .venv/bin/activate
+                    python -m pip install --upgrade pip
+                    python -m pip install -e . pytest
+                    python -m pytest -v
+                '''
+            }
+        }
+        stage('Build Docker Image') {
+            steps { sh 'docker build --tag ${IMAGE_NAME}:${IMAGE_TAG} --tag ${IMAGE_NAME}:latest .' }
+        }
+        stage('Smoke Test Container') {
+            steps { sh 'docker run --rm ${IMAGE_NAME}:${IMAGE_TAG} --help' }
+        }
+    }
+    post {
+        always {
+            echo "Build ${BUILD_NUMBER} finished: ${currentBuild.currentResult}"
+            archiveArtifacts artifacts: 'Dockerfile,Jenkinsfile,pyproject.toml,README.md', fingerprint: true
+        }
+        success { echo 'Tests passed; image built and smoke-tested.' }
+        failure { echo 'Pipeline failed. Review stage logs.' }
+    }
+}
