@@ -1,36 +1,75 @@
+
 pipeline {
     agent any
-    options { timestamps(); disableConcurrentBuilds() }
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+    }
+
     environment {
         IMAGE_NAME = 'xai-plantdx-dataset-audit'
         IMAGE_TAG = "${BUILD_NUMBER}"
+        PROJECT_DIR = 'xai-plantdx-devops'
     }
+
     stages {
-        stage('Checkout') { steps { checkout scm } }
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
         stage('Install and Test') {
             steps {
+                dir("${PROJECT_DIR}") {
+                    sh '''
+                        python3 -m venv .venv
+                        . .venv/bin/activate
+                        python -m pip install --upgrade pip
+                        python -m pip install -e . pytest
+                        python -m pytest -v
+                    '''
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                dir("${PROJECT_DIR}") {
+                    sh '''
+                        docker build \
+                          --tag ${IMAGE_NAME}:${IMAGE_TAG} \
+                          --tag ${IMAGE_NAME}:latest .
+                    '''
+                }
+            }
+        }
+
+        stage('Smoke Test Container') {
+            steps {
                 sh '''
-                    python3 -m venv .venv
-                    . .venv/bin/activate
-                    python -m pip install --upgrade pip
-                    python -m pip install -e . pytest
-                    python -m pytest -v
+                    docker run --rm \
+                      ${IMAGE_NAME}:${IMAGE_TAG} --help
                 '''
             }
         }
-        stage('Build Docker Image') {
-            steps { sh 'docker build --tag ${IMAGE_NAME}:${IMAGE_TAG} --tag ${IMAGE_NAME}:latest .' }
-        }
-        stage('Smoke Test Container') {
-            steps { sh 'docker run --rm ${IMAGE_NAME}:${IMAGE_TAG} --help' }
-        }
     }
+
     post {
         always {
             echo "Build ${BUILD_NUMBER} finished: ${currentBuild.currentResult}"
-            archiveArtifacts artifacts: 'Dockerfile,Jenkinsfile,pyproject.toml,README.md', fingerprint: true
+            archiveArtifacts artifacts: 'xai-plantdx-devops/Dockerfile,xai-plantdx-devops/Jenkinsfile,xai-plantdx-devops/pyproject.toml,xai-plantdx-devops/README.md',
+                fingerprint: true,
+                allowEmptyArchive: true
         }
-        success { echo 'Tests passed; image built and smoke-tested.' }
-        failure { echo 'Pipeline failed. Review stage logs.' }
+
+        success {
+            echo 'Tests passed; image built and smoke-tested.'
+        }
+
+        failure {
+            echo 'Pipeline failed. Review stage logs.'
+        }
     }
 }
