@@ -1,0 +1,2 @@
+[console_scripts]
+plant-dataset-audit = plant_research.audit:main
